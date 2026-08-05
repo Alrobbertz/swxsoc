@@ -9,7 +9,16 @@ import pytest
 from astropy.time import Time
 
 import swxsoc
-from swxsoc.util.config import _is_writable_dir, load_config
+from swxsoc.util.config import (
+    TSD_REGION,
+    _is_writable_dir,
+    copy_default_config,
+    get_all_instrument_buckets,
+    get_incoming_bucket,
+    get_instrument_bucket,
+    get_instrument_package,
+    load_config,
+)
 
 USER = os.path.expanduser("~")
 
@@ -171,3 +180,137 @@ def test_print_config(capsys):
     assert "[logger]" in captured.out
     # assert mission
     assert "[mission]" in captured.out
+
+
+def test_copy_default_config_overwriting(tmpdir, monkeypatch):
+    """Tests the overwrite=False keyword with copy_default_config()"""
+    monkeypatch.setenv("SWXSOC_CONFIGDIR", tmpdir)
+    copy_default_config()
+
+    # Test overwrite=False issues warning
+    with pytest.warns(UserWarning):
+        copy_default_config(overwrite=False)
+
+    # Test overwrite=True issues warning and makes backup
+    with pytest.warns(UserWarning):
+        copy_default_config(overwrite=True)
+
+    bak_file = os.path.join(tmpdir, "config.yml.bak")
+    assert os.path.exists(bak_file)
+
+    # Test loading config
+    config = load_config()
+
+    assert isinstance(config, dict)
+    assert "general" in config
+    assert "logger" in config
+
+
+def test_tsd_region_default():
+    """
+    Test that TSD_REGION is derived from AWS_REGION (or defaults to us-east-1).
+    """
+    assert TSD_REGION == os.getenv("AWS_REGION", "us-east-1")
+
+
+def test_load_config_bucket_fields():
+    """
+    Test that load_config() derives bucket_mission_name/incoming_bucket/instr_to_bucket_name.
+    """
+    config = load_config()
+    mission_config = config["mission"]
+
+    assert mission_config["bucket_mission_name"] == "hermes"
+    assert mission_config["incoming_bucket"] == "hermes-incoming"
+    assert mission_config["instr_to_bucket_name"]["eea"] == "hermes-eea"
+
+
+def test_load_config_incoming_bucket_override(monkeypatch):
+    """
+    Test that SWXSOC_INCOMING_BUCKET overrides the derived incoming bucket name.
+    """
+    monkeypatch.setenv("SWXSOC_INCOMING_BUCKET", "custom-incoming")
+
+    config = load_config()
+
+    assert config["mission"]["incoming_bucket"] == "custom-incoming"
+
+
+def test_get_incoming_bucket_development(monkeypatch):
+    monkeypatch.delenv("LAMBDA_ENVIRONMENT", raising=False)
+    assert get_incoming_bucket() == "dev-hermes-incoming"
+
+
+def test_get_incoming_bucket_production(monkeypatch):
+    monkeypatch.setenv("LAMBDA_ENVIRONMENT", "PRODUCTION")
+    assert get_incoming_bucket() == "hermes-incoming"
+
+
+def test_get_instrument_bucket_development(monkeypatch):
+    monkeypatch.delenv("LAMBDA_ENVIRONMENT", raising=False)
+    assert get_instrument_bucket("eea") == "dev-hermes-eea"
+
+
+def test_get_instrument_bucket_production(monkeypatch):
+    monkeypatch.setenv("LAMBDA_ENVIRONMENT", "PRODUCTION")
+    assert get_instrument_bucket("eea") == "hermes-eea"
+
+
+def test_get_all_instrument_buckets_development(monkeypatch):
+    monkeypatch.delenv("LAMBDA_ENVIRONMENT", raising=False)
+    buckets = get_all_instrument_buckets()
+    assert len(buckets) == len(swxsoc.config["mission"]["inst_names"])
+    assert all(bucket.startswith("dev-hermes-") for bucket in buckets)
+
+
+def test_get_all_instrument_buckets_production(monkeypatch):
+    monkeypatch.setenv("LAMBDA_ENVIRONMENT", "PRODUCTION")
+    buckets = get_all_instrument_buckets()
+    assert len(buckets) == len(swxsoc.config["mission"]["inst_names"])
+    assert all(
+        bucket.startswith("hermes-") and not bucket.startswith("dev-")
+        for bucket in buckets
+    )
+
+
+def test_get_instrument_package_hermes(use_mission):
+    # Mission: hermes
+    assert get_instrument_package("eea") == "hermes_eea"
+    assert get_instrument_package("EEA") == "hermes_eea"
+    assert get_instrument_package("nemisis") == "hermes_nemisis"
+    assert get_instrument_package("Nemisis") == "hermes_nemisis"
+    with pytest.raises(ValueError):
+        get_instrument_package("not_an_inst")
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_get_instrument_package_padre(use_mission):
+    # Mission: padre
+    assert get_instrument_package("meddea") == "padre_meddea"
+    assert get_instrument_package("MEDDEA") == "padre_meddea"
+    assert get_instrument_package("sharp") == "padre_sharp"
+    assert get_instrument_package("SHARP") == "padre_sharp"
+    with pytest.raises(ValueError):
+        get_instrument_package("fake")
+
+
+@pytest.mark.parametrize("use_mission", ["swxsoc_pipeline"], indirect=True)
+def test_get_instrument_package_swxsoc_pipeline(use_mission):
+    # Mission: swxsoc_pipeline
+    assert get_instrument_package("reach") == "swxsoc_reach"
+    assert get_instrument_package("REACH") == "swxsoc_reach"
+    with pytest.raises(ValueError):
+        get_instrument_package("unknown")
+
+
+@pytest.mark.parametrize("use_mission", ["impax"], indirect=True)
+def test_get_instrument_package_impax(use_mission):
+    # Mission: impax
+    assert get_instrument_package("iaxis") == "impax_iaxis"
+    assert get_instrument_package("IAXIS") == "impax_iaxis"
+    assert get_instrument_package("ifire") == "impax_ifire"
+    assert get_instrument_package("IFIRE") == "impax_ifire"
+    assert get_instrument_package("craft") == "impax_craft"
+    assert get_instrument_package("CRAFT") == "impax_craft"
+    with pytest.raises(ValueError):
+        get_instrument_package("unknown")
