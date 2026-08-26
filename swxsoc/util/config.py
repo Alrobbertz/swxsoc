@@ -7,7 +7,9 @@ This code is based on that provided by SunPy see
 
 import os
 import shutil
+from itertools import combinations
 from pathlib import Path
+from typing import Any, Dict, List
 
 import yaml
 from astropy.time import Time
@@ -28,6 +30,9 @@ __all__ = [
     "get_incoming_bucket",
     "get_instrument_bucket",
     "get_all_instrument_buckets",
+    "get_instrument_package",
+    "compute_instrument_metadata",
+    "compute_instrument_configurations",
 ]
 
 # Default directories for Lambda Environment
@@ -36,6 +41,52 @@ CACHE_DIR = "/tmp/.cache"
 
 # AWS region used for the Timestream client session.
 TSD_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+# Default catalog of file types, used if not defined in the user's config.yml
+DEFAULT_FILE_TYPES = [
+    {
+        "short_name": "bin",
+        "full_name": "Raw BINARY",
+        "description": "Raw Binary File",
+        "extension": ".bin",
+    },
+    {
+        "short_name": "dat",
+        "full_name": "Raw DAT",
+        "description": "Raw Dat File",
+        "extension": ".dat",
+    },
+    {
+        "short_name": "idx",
+        "full_name": "Raw IDX",
+        "description": "Raw IDX File",
+        "extension": ".idx",
+    },
+    {
+        "short_name": "cdf",
+        "full_name": "Common Data Format",
+        "description": "Common Data Format File",
+        "extension": ".cdf",
+    },
+    {
+        "short_name": "fits",
+        "full_name": "Flexible Image Transport System",
+        "description": "Flexible Image Transport System File",
+        "extension": ".fits",
+    },
+    {
+        "short_name": "csv",
+        "full_name": "Comma Separated Values",
+        "description": "CSV File",
+        "extension": ".csv",
+    },
+    {
+        "short_name": "json",
+        "full_name": "JavaScript Object Notation",
+        "description": "JSON File",
+        "extension": ".json",
+    },
+]
 
 # This is to fix issue with AppDirs not writing to /tmp/ in AWS Lambda
 if not os.getenv("LAMBDA_ENVIRONMENT"):
@@ -67,6 +118,11 @@ def load_config():
 
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
+
+    # Catalog of recognized file types, and the database host used by the
+    # MetaTracker file-metadata database
+    config["file_types"] = config.get("file_types", DEFAULT_FILE_TYPES)
+    config["db_host"] = config.get("db_host", "sqlite:///")
 
     # Loaded either from env var or from config file
     selected_mission = os.getenv("SWXSOC_MISSION", config["selected_mission"])
@@ -103,9 +159,11 @@ def load_config():
         "bucket_mission_name": bucket_mission_name,
         "min_valid_time": min_valid_time,
         "max_valid_time": max_valid_time,
-        "valid_data_levels": mission_data.get(
-            "valid_data_levels", ["raw", "l0", "l1", "ql", "l2", "l3", "l4"]
-        ),
+        "data_levels": mission_data.get("data_levels", []),
+        "valid_data_levels": [
+            data_level["short_name"]
+            for data_level in mission_data.get("data_levels", [])
+        ],
         "inst_names": [inst["name"] for inst in mission_data.get("instruments", [])],
         "inst_shortnames": [
             inst["shortname"] for inst in mission_data.get("instruments", [])
@@ -279,6 +337,66 @@ def get_instrument_package(instrument_name: str) -> str:
     else:
         # otherwise, default to the convention of {mission_name}_{instrument_name}
         return f"{mission_config['mission_name'].lower()}_{instrument_name.lower()}"
+
+
+def compute_instrument_metadata() -> List[Dict[str, Any]]:
+    """
+    Compute instrument metadata for the MetaTracker database from the active
+    SWxSOC mission configuration.
+    Used to populate the ``instrument`` table in the MetaTracker database.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        A list of instrument metadata dictionaries, each containing
+        ``instrument_id``, ``description``, ``full_name``, and ``short_name``.
+    """
+    mission_config = swxsoc.config["mission"]
+    inst_names = mission_config["inst_names"]
+
+    return [
+        {
+            "instrument_id": idx + 1,
+            "description": f"{mission_config['inst_fullnames'][idx]} ({mission_config['inst_targetnames'][idx]})",
+            "full_name": mission_config["inst_fullnames"][idx],
+            "short_name": mission_config["inst_shortnames"][idx],
+        }
+        for idx in range(len(inst_names))
+    ]
+
+
+def compute_instrument_configurations() -> List[Dict[str, Any]]:
+    """
+    Compute all possible instrument configurations (combinations of
+    instruments) for the MetaTracker database from the active SWxSOC mission
+    configuration.
+    Used to populate the ``instrument_configuration`` table in the MetaTracker
+    database.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        A list of instrument configuration dictionaries, each containing an
+        ``instrument_configuration_id`` and one ``instrument_{i}_id`` key per
+        instrument slot (``None`` if unused in that combination).
+    """
+    num_instruments = len(swxsoc.config["mission"]["inst_names"])
+
+    instrument_configurations = []
+    config_id = 1
+    for r in range(1, num_instruments + 1):
+        for combo in combinations(range(1, num_instruments + 1), r):
+            config: Dict[str, Any] = {"instrument_configuration_id": config_id}
+            config.update(
+                {
+                    f"instrument_{i + 1}_id": combo[i] if i < len(combo) else None
+                    for i in range(num_instruments)
+                }
+            )
+            instrument_configurations.append(config)
+            config_id += 1
+
+    return instrument_configurations
 
 
 def _get_user_configdir():

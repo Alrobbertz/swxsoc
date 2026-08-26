@@ -1,0 +1,592 @@
+from datetime import datetime, timezone
+
+import pytest
+
+pytest.importorskip("sqlalchemy")
+pytest.importorskip("tenacity")
+
+import swxsoc
+from swxsoc.db import create_engine, create_session
+from swxsoc.db.tables import (
+    create_tables,
+    science_file_table,
+    science_product_table,
+    status_table,
+)
+from swxsoc.db.tracker import MetaTracker
+from swxsoc.util import util  # type: ignore
+
+TEST_DB_HOST = "sqlite://"
+
+
+@pytest.fixture
+def test_science_files(tmp_path):
+    """Generate test science files in temporary directory.
+
+    Returns a dict with keys for each test file type. Non-existent files are
+    not created (for testing error handling).
+    """
+    files = {
+        "science": tmp_path / "padreMDA0_250403185914.dat",
+        "random": tmp_path / "ducks.txt",
+        "bad_science": tmp_path / "hermes_NEM_2l_2022259-030002_v01.bin",
+        "non_existing": tmp_path / "hermes_NEM_l0_2022259-030002_v01.bop",
+    }
+
+    # Create all files except the non-existing one
+    for key, path in files.items():
+        if key != "non_existing":
+            path.write_text("Test")
+
+    return files
+
+
+def test_tracker() -> None:
+    """
+    Test Tracker
+    """
+    engine = create_engine(TEST_DB_HOST)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    assert test_tracker is not None
+
+    # trunk-ignore(mypy/assignment)
+    engine = "not_an_engine"  # type: ignore[assignment]
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    try:
+        test_tracker = MetaTracker(
+            engine=engine, science_file_parser=science_file_parser
+        )
+    except Exception as e:
+        assert isinstance(e, ConnectionError)
+
+
+def test_tracker_parse_extension(test_science_files) -> None:
+    """
+    Test Tracker parse extension
+    """
+    engine = create_engine(TEST_DB_HOST)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine, science_file_parser=science_file_parser)
+
+    extension = test_tracker.parse_extension(test_science_files["science"])
+    assert extension == ".dat"
+
+    extension = test_tracker.parse_extension(test_science_files["random"])
+    assert extension == ".txt"
+
+    extension = test_tracker.parse_extension(test_science_files["non_existing"])
+    assert extension == ".bop"
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_tracker_is_valid_file_type(use_mission, test_science_files) -> None:
+    """
+    Test Tracker is valid file type
+    """
+    # Create engine and session
+    engine = create_engine(TEST_DB_HOST)
+    session = create_session(engine)
+
+    # Set up tables
+    create_tables(engine=engine)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    extension = test_tracker.parse_extension(test_science_files["science"])
+    assert test_tracker.is_valid_file_type(session=session, extension=extension)
+
+    extension = test_tracker.parse_extension(test_science_files["non_existing"])
+    assert not test_tracker.is_valid_file_type(session=session, extension=extension)
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_tracker_parse_filename(use_mission, test_science_files) -> None:
+    """
+    Test Tracker parse filename
+    """
+    engine = create_engine(TEST_DB_HOST)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    filename = test_tracker.parse_filename(test_science_files["science"])
+    assert filename == "padreMDA0_250403185914"
+
+    filename = test_tracker.parse_filename(test_science_files["random"])
+    assert filename == "ducks"
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_tracker_parse_file(use_mission, test_science_files) -> None:
+    """
+    Test Tracker parse file
+    """
+    file_name = test_science_files["science"]
+
+    engine = create_engine(TEST_DB_HOST)
+    session = create_session(engine)
+    create_tables(engine=engine)
+    ScienceFileTable = science_file_table.return_class()
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    s3_key = "s3://padre/test_file/padreMDA0_250403185914.dat"
+    s3_bucket = "padre"
+
+    file = test_tracker.parse_file(session, file_name, s3_key, s3_bucket)
+
+    assert file is not None
+    print(file)
+
+    assert len(file.keys()) == 11
+
+    test_tracker.add_to_science_file_table(session, file, 1)
+
+    # Check that file is in database
+    with session.begin() as sql_session:
+        found_file = (
+            sql_session.query(ScienceFileTable)
+            .filter(ScienceFileTable.filename == "padreMDA0_250403185914")
+            .first()
+        )
+
+        assert found_file is not None
+        assert found_file.filename == "padreMDA0_250403185914"
+        assert found_file.s3_key == s3_key
+        assert found_file.s3_bucket == s3_bucket
+
+
+def test_add_to_status_table() -> None:
+    """
+    Test add_to_status_table function
+    """
+    # Setup: Create a test database and session
+    engine = create_engine(TEST_DB_HOST)
+    session = create_session(engine)
+    create_tables(engine=engine)
+    ScienceFileTable = science_file_table.return_class()
+    StatusTable = status_table.return_class()
+
+    # Create a test science file entry in the database
+    science_file_id = 1
+    with session.begin() as sql_session:
+        science_file = ScienceFileTable(
+            science_product_id=1,
+            file_type="dat",
+            file_level="L1",
+            filename="test_file",
+            file_version="1.0",
+            file_size=1024,
+            s3_key="s3://test_bucket/test_file.dat",
+            s3_bucket="test_bucket",
+            file_extension=".dat",
+            file_path="/tmp/test_file.dat",
+            file_modified_timestamp=datetime.now(timezone.utc),
+            is_public=True,
+        )
+        sql_session.add(science_file)
+        sql_session.flush()
+        science_file_id = science_file.science_file_id  # type: ignore[assignment]
+
+    # Initialize MetaTracker instance
+    science_file_parser = util.parse_science_filename
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    # Test: Add a new status entry
+    processing_status = "SUCCESS"
+    processing_status_message = "Processing started"
+    origin_file_ids: list[int] = []
+
+    status_id = test_tracker.add_to_status_table(
+        session=session,
+        science_file_id=science_file_id,
+        processing_status=processing_status,
+        processing_status_message=processing_status_message,
+    )
+
+    assert status_id is not None
+
+    # Verify: Check that the status entry was added to the database
+    with session.begin() as sql_session:
+        status_entry = (
+            sql_session.query(StatusTable)
+            .filter(StatusTable.science_file_id == science_file_id)
+            .first()
+        )
+
+        assert status_entry is not None
+        assert status_entry.science_file_id == science_file_id
+        assert status_entry.processing_status == processing_status
+        assert status_entry.processing_status_message == processing_status_message
+        assert status_entry.reprocessed_count == 0  # Initial value
+        assert status_entry.origin_files == origin_file_ids
+
+    # Test: Update an existing status entry
+    updated_processing_status = "FAILURE"
+    updated_processing_status_message = "Processing failed"
+    updated_processing_time_length = 120  # seconds
+
+    updated_status_id = test_tracker.add_to_status_table(
+        session=session,
+        science_file_id=science_file_id,
+        processing_status=updated_processing_status,
+        processing_status_message=updated_processing_status_message,
+        processing_time_length=updated_processing_time_length,
+        origin_file_ids=origin_file_ids,
+    )
+
+    assert updated_status_id == status_id  # Ensure the same entry was updated
+
+    # Verify: Check that the status entry was updated in the database
+    with session.begin() as sql_session:
+        updated_status_entry = (
+            sql_session.query(StatusTable)
+            .filter(StatusTable.science_file_id == science_file_id)
+            .first()
+        )
+
+        assert updated_status_entry is not None
+        assert updated_status_entry.processing_status == updated_processing_status
+        assert (
+            updated_status_entry.processing_status_message
+            == updated_processing_status_message
+        )
+        assert updated_status_entry.reprocessed_count == 1  # Incremented value
+        assert (
+            updated_status_entry.processing_time_length
+            == updated_processing_time_length
+        )
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_tracker_parse_science_file(use_mission, test_science_files) -> None:
+    test_file = test_science_files["science"]
+
+    engine = create_engine(TEST_DB_HOST)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    science_file = test_tracker.parse_science_file_data(file=test_file)
+
+    assert science_file is not None
+
+    assert all(elem in science_file for elem in ["mode", "instrument", "time"])
+
+    swxsoc.log.info(test_tracker.parse_science_file_data(file=test_file))
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_track_is_valid_instrument(use_mission, test_science_files) -> None:
+    test_file = test_science_files["science"]
+
+    engine = create_engine(TEST_DB_HOST)
+
+    session = create_session(engine)
+
+    create_tables(engine=engine)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    instrument = test_tracker.parse_science_file_data(file=test_file)["instrument"]
+
+    assert test_tracker.is_valid_instrument(
+        session=session, instrument_short_name=instrument
+    )
+
+    test_file = test_science_files["non_existing"]
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    try:
+        instrument = test_tracker.parse_science_file_data(file=test_file)["instrument"]
+
+    except ValueError as e:
+        assert e is not None
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_get_instruments(use_mission, test_science_files) -> None:
+    engine = create_engine(TEST_DB_HOST)
+    session = create_session(engine)
+    create_tables(engine=engine)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    instruments = test_tracker.get_instruments(session=session)
+
+    assert instruments is not None
+    assert len(instruments) == 3
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_get_instrument_configurations(use_mission, test_science_files) -> None:
+    engine = create_engine(TEST_DB_HOST)
+
+    session = create_session(engine)
+
+    create_tables(engine=engine)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    instrument_configurations = test_tracker.get_instrument_configurations(
+        session=session
+    )
+
+    assert instrument_configurations is not None
+
+    assert len(instrument_configurations) == 7
+
+    assert instrument_configurations[1] == ["meddea"]
+
+    swxsoc.log.info(instrument_configurations)
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_get_instrument_by_id(use_mission, test_science_files) -> None:
+    engine = create_engine(TEST_DB_HOST)
+
+    session = create_session(engine)
+
+    create_tables(engine=engine)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    instrument = test_tracker.get_instrument_by_id(session=session, instrument_id=1)
+
+    assert instrument is not None
+
+    assert instrument == "meddea"
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_map_instrument_list(use_mission, test_science_files) -> None:
+    engine = create_engine(TEST_DB_HOST)
+
+    session = create_session(engine)
+
+    create_tables(engine=engine)
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    instrument_list = test_tracker.get_instruments(session=session)
+
+    instrument_map = test_tracker.map_instrument_list(
+        session=session, instrument_list=instrument_list
+    )  # type: ignore[arg-type]
+
+    assert instrument_map is not None
+
+    assert len(instrument_map) == 3
+
+
+@pytest.mark.parametrize("use_mission", ["padre"], indirect=True)
+def test_track(use_mission, test_science_files) -> None:
+    engine = create_engine(TEST_DB_HOST)
+
+    session = create_session(engine)
+
+    create_tables(engine=engine)
+    ScienceFileTable = science_file_table.return_class()
+    ScienceProductTable = science_product_table.return_class()
+    StatusTable = status_table.return_class()
+
+    # Science File Parser
+    science_file_parser = util.parse_science_filename
+
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+    s3_key = "s3://padre/test_file/padreMDA0_250403185914.dat"
+    s3_bucket = "padre"
+    file_path = test_science_files["science"]
+
+    # Define a test status
+    test_status = {
+        "processing_status": "SUCCESS",
+        "processing_status_message": "Initial status",
+        "processing_time_length": 60,
+        "origin_file_ids": [],
+    }
+
+    test_tracker.track(
+        file=file_path, s3_key=s3_key, s3_bucket=s3_bucket, status=test_status
+    )
+
+    # Test Non Existing File
+    try:
+        test_tracker.track(
+            file=test_science_files["non_existing"],
+            s3_key=s3_key,
+            s3_bucket=s3_bucket,
+        )
+
+    except FileNotFoundError as e:
+        assert e is not None
+
+    # Check science file table and science product table were created
+    with session.begin() as sql_session:
+        files = sql_session.query(ScienceFileTable).all()
+        assert files is not None
+        products = sql_session.query(ScienceProductTable).all()
+        assert products is not None
+
+        # Verify status entry
+        status_entry = sql_session.query(StatusTable).first()
+        assert status_entry is not None
+        assert status_entry.processing_status == test_status["processing_status"]
+        assert (
+            status_entry.processing_status_message
+            == test_status["processing_status_message"]
+        )
+        assert (
+            status_entry.processing_time_length == test_status["processing_time_length"]
+        )
+        assert status_entry.origin_files == test_status["origin_file_ids"]
+
+    assert test_tracker is not None
+
+    # Test duplicate file tracking (should not raise error but update timestamp)
+    test_tracker.track(
+        file=test_science_files["science"], s3_key=s3_key, s3_bucket=s3_bucket
+    )
+
+    # Test bad file type
+    try:
+        test_tracker.track(
+            file=test_science_files["random"], s3_key=s3_key, s3_bucket=s3_bucket
+        )
+
+    except ValueError as e:
+        assert e is not None
+
+    # Test bad file name
+    try:
+        test_tracker.track(
+            file=test_science_files["bad_science"], s3_key=s3_key, s3_bucket=s3_bucket
+        )
+
+    except ValueError as e:
+        assert e is not None
+
+
+def test_add_to_status_table_with_origin_files(test_science_files) -> None:
+    """
+    Test add_to_status_table with origin files
+    """
+    engine = create_engine(TEST_DB_HOST)
+    session = create_session(engine)
+    create_tables(engine=engine)
+    ScienceFileTable = science_file_table.return_class()
+    StatusTable = status_table.return_class()
+
+    # Create two science files to act as origin files
+    with session.begin() as sql_session:
+        origin_file_1 = ScienceFileTable(
+            science_product_id=1,
+            file_type="dat",
+            file_level="L1",
+            filename="origin_file_1",
+            file_version="1.0",
+            file_size=100,
+            s3_key="s3://test_bucket/origin_file_1.dat",
+            s3_bucket="test_bucket",
+            file_extension=".dat",
+            file_path="/tmp/origin_file_1.dat",
+            file_modified_timestamp=datetime.now(timezone.utc),
+            is_public=True,
+        )
+        origin_file_2 = ScienceFileTable(
+            science_product_id=1,
+            file_type="dat",
+            file_level="L1",
+            filename="origin_file_2",
+            file_version="1.0",
+            file_size=200,
+            s3_key="s3://test_bucket/origin_file_2.dat",
+            s3_bucket="test_bucket",
+            file_extension=".dat",
+            file_path="/tmp/origin_file_2.dat",
+            file_modified_timestamp=datetime.now(timezone.utc),
+            is_public=True,
+        )
+        sql_session.add_all([origin_file_1, origin_file_2])
+        sql_session.flush()
+        origin_file_ids = [origin_file_1.science_file_id, origin_file_2.science_file_id]
+
+        # Create the target science file for the status entry
+        science_file = ScienceFileTable(
+            science_product_id=1,
+            file_type="dat",
+            file_level="L1",
+            filename="target_file",
+            file_version="1.0",
+            file_size=300,
+            s3_key="s3://test_bucket/target_file.dat",
+            s3_bucket="test_bucket",
+            file_extension=".dat",
+            file_path="/tmp/target_file.dat",
+            file_modified_timestamp=datetime.now(timezone.utc),
+            is_public=True,
+        )
+        sql_session.add(science_file)
+        sql_session.flush()
+        science_file_id = science_file.science_file_id
+
+    # Now add status with origin files
+    science_file_parser = util.parse_science_filename
+    test_tracker = MetaTracker(engine=engine, science_file_parser=science_file_parser)
+
+    status_id = test_tracker.add_to_status_table(
+        session=session,
+        science_file_id=science_file_id,  # type: ignore[arg-type]
+        processing_status="SUCCESS",
+        processing_status_message="Linked to origins",
+        origin_file_ids=origin_file_ids,  # type: ignore[arg-type]
+    )
+    assert status_id is not None
+
+    # Verify: Check that the status entry was added and has the right origin files
+    with session.begin() as sql_session:
+        status_entry = (
+            sql_session.query(StatusTable)
+            .filter(StatusTable.science_file_id == science_file_id)
+            .first()
+        )
+        assert status_entry is not None
+        assert len(status_entry.origin_files) == 2
+        actual_origin_ids = {f.science_file_id for f in status_entry.origin_files}
+        assert set(origin_file_ids) == actual_origin_ids

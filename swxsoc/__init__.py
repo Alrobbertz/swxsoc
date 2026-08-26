@@ -26,9 +26,9 @@ def reconfigure():
     Reconfigure the module by reloading the configuration.
 
     This function reloads the configuration from the config.yml file
-    and updates the global `config` variable. It is useful for testing
-    purposes when changes to the configuration file need to be applied
-    without restarting the Python session.
+    and updates the global `config` variable.
+    This is useful for testing purposes when changes to the configuration
+    file need to be applied without restarting the Python session.
 
     Example:
         from swxsoc import reconfigure
@@ -41,4 +41,4 @@ def reconfigure():
 
 
 # Then you can be explicit to control what ends up in the namespace,
-__all__ = ["config", "print_config"]
+__all__ = ["config", "print_config", "reconfigure"]
