@@ -12,6 +12,7 @@ For function and class details, see the :ref:`reference`.
 .. toctree::
    :maxdepth: 1
 
+   installation
    quick_reference
 
 .. toctree::

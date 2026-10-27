@@ -7,7 +7,7 @@ Pipeline Notifications (Comms)
 .. note::
 
    **Required install:** ``pip install swxsoc`` (no extras needed).
-   See :ref:`dev_env_extras` for all install options.
+   See :ref:`installation` for all install options.
 
 Overview
 ========

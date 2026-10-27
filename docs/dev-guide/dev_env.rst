@@ -8,41 +8,16 @@ This Python package is used in the pipeline processing of scientific data from S
 Special consideration is therefore required to ensure that development is compatible with the pipeline environment.
 It is also important to ensure that this package is compatible with a user's systems such as a mac and windows.
 
-.. _dev_env_extras:
-
 Installing for Development
 ==========================
-The base install of ``swxsoc`` works without any optional extras.
-Install the extras you need from the root of the repository:
+Install ``swxsoc`` in editable mode from a clone of the repository.
+See :ref:`installation` for the full list of optional extras and what each one adds.
 
-.. list-table::
-   :widths: 20 80
-   :header-rows: 1
-
-   * - Extra
-     - What it adds
-   * - ``cdf``
-     - SpacePy, SAMMI, and matplotlib, for reading, writing, validating, and plotting CDF files.
-   * - ``fits``
-     - Nothing new, astropy is already a base dependency.
-   * - ``tracker``
-     - SQLAlchemy and tenacity, for ``swxsoc.db.tracker`` (MetaTracker).
-   * - ``all``
-     - The ``cdf``, ``fits``, and ``tracker`` extras.
-   * - ``docs``
-     - Sphinx and the Sphinx extensions used to build these docs, including ``sphinx-llms-txt``.
-   * - ``test``
-     - pytest and the plugins used by the test suite.
-   * - ``style``
-     - Ruff and rstcheck.
-   * - ``dev``
-     - The ``docs``, ``test``, and ``style`` extras.
-
-For example, to install everything needed to develop, test, and build the docs, run:
+For example, to install everything needed to develop, test, and build the docs, run from the root of the repository:
 
 .. code-block:: bash
 
-    pip install -e .[dev,all]
+    pip install -e ".[dev,all]"
 
 To build the docs, run:
 

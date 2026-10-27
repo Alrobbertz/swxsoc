@@ -80,7 +80,7 @@
   | `swxsoc/util/logger.py` | `docs/user-guide/logger.rst` |
   | `swxsoc/util/schema.py`, CDF attribute schemas | `docs/user-guide/schema_information_guide.rst` |
   | Any public API addition/removal | `docs/api.rst` (`automodapi` entries) |
-  | `pyproject.toml` optional-dependencies changes | This file's "Optional Dependency Groups" section, `docs/dev-guide/dev_env.rst` |
+  | `pyproject.toml` optional-dependencies changes | This file's "Optional Dependency Groups" section, `docs/user-guide/installation.rst`, `docs/dev-guide/dev_env.rst` |
   | Environment variables read by `swxsoc` | `docs/user-guide/customization.rst` ("Environment Variables" table) |
   | Any user-facing behavior change | `CHANGELOG.rst` at the repo root (pulled into the docs by `docs/whatsnew/changelog.rst`) |
 

@@ -17,10 +17,10 @@ Install the ``cdf`` extra:
 
 .. code-block:: bash
 
-    pip install swxsoc[cdf]
+    pip install "swxsoc[cdf]"
 
 It includes SpacePy, which bundles the NASA CDF library, so you do not need to install the CDF library separately.
-See :ref:`dev_env_extras` for the other optional extras.
+See :ref:`install_extras` for the other optional extras.
 
 How do I select my mission?
 ---------------------------
