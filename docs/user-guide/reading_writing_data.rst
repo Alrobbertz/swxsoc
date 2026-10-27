@@ -97,6 +97,14 @@ CDF has no ``float16`` or ``uint64`` type.
 
 For more information about data type mapping for CDF files see :ref:`data_type_mapping`.
 
+.. note::
+
+   **Pass the dtype to Quantity explicitly.**
+   `~astropy.units.Quantity` converts integer input to ``float64`` unless you pass ``dtype``, even when the input array is already ``uint16`` or ``int16``.
+   Check the dtype of each measurement before you save the file.
+   Adding a `~astropy.table.Column` that has a unit to a `~astropy.timeseries.TimeSeries` also loses its ``dtype``, because the column is converted to a `~astropy.units.Quantity` without it.
+   See :ref:`adding a column <rw_add_column>` for an example.
+
 The SWXData Data Structure
 ==========================
 
@@ -288,11 +296,35 @@ New ``timeseries`` measurements must have the same number of time stamps as the 
 
 Add a time-varying scalar measurement with :py:func:`~swxsoc.swxdata.SWXData.add_measurement`:
 
+.. doctest::
+
     >>> sw_data.add_measurement(
     ...     measure_name="By",
     ...     data=u.Quantity([4, 3, 2, 1], "nT", dtype=np.int16),
     ...     meta={"CATDESC": "Y component of the magnetic field, GSE"},
     ... )
+
+.. _rw_add_column:
+
+Add a column directly to a `~astropy.timeseries.TimeSeries` with :py:meth:`~astropy.table.Table.add_column`, passing a `~astropy.units.Quantity` that has the ``dtype`` you want.
+The following example keeps the ``uint16`` dtype:
+
+.. doctest::
+
+    >>> dist_ts = TimeSeries(time_start="2016-03-22T12:30:31", time_delta=[1, 1, 1, 1] * u.s)
+    >>> dist_ts.add_column(u.Quantity([1, 2, 3, 4], "km", dtype=np.uint16), name="Distance")
+    >>> dist_ts["Distance"].dtype
+    dtype('uint16')
+
+Do not wrap the data in a `~astropy.table.Column` with a unit, because the dtype is lost and the column is stored as ``float64``:
+
+.. doctest:: python
+
+    >>> # Stored as float64, not uint16
+    >>> from astropy.table import Column
+    >>> dist_ts.add_column(Column(name="Distance2", data=u.Quantity([1, 2, 3, 4], "km", dtype=np.uint16)))
+    >>> dist_ts["Distance2"].dtype
+    dtype('float64')
 
 .. _rw_add_support:
 
