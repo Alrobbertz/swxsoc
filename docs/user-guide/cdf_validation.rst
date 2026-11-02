@@ -8,11 +8,14 @@ Use :py:func:`swxsoc.util.validation.validate` to check a CDF file for missing m
 ``validate`` returns a list of problems, and an empty list means no problems were found.
 
 The SAMMI package has more information on CDF validation, including other tools you can use to check your files.
-See the `SAMMI CDF validation guide <https://sammi-cdf.readthedocs.io/en/latest/user-guide/cdf_validation.html>`_.
+See the `SAMMI CDF validation guide <https://sammi-cdf.readthedocs.io/en/latest/user-guide/cdf_validation.html>`_ for more information.
+The SAMMI CDF validation routines leverage the same web API used by the NASA CDAWeb validation service, so you can use them to check your files before you submit them to CDAWeb.
+This is the same validation API used by the `ISTP Metadata Editor <https://spdf.gsfc.nasa.gov/istp-metadata-editor/>`_, and the same code used by the legacy `Java Based Skeleton Editor <https://spdf.gsfc.nasa.gov/skteditor/>`_. 
+The SAMMI Python package wraps this web API for convenient use in Python, and is included in the ``swxsoc[cdf]`` extra.
 
 .. note::
 
-   **Required install:** ``pip install swxsoc[cdf]``
+   **Required install:** ``pip install "swxsoc[cdf]"`` to get the CDF reading and writing functionality.
 
 Validating a File
 =================

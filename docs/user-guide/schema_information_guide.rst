@@ -12,7 +12,7 @@ This page lists the required and derived attributes, shows the template function
 
 .. note::
 
-   **Required install:** ``pip install swxsoc[cdf]``
+   **Required install:** ``pip install "swxsoc[cdf]"`` to get the CDF reading and writing functionality.
 
    :py:class:`~swxsoc.util.schema.SWXSchema` is built on the ``CdfAttributeManager`` class from the `SAMMI <https://sammi-cdf.readthedocs.io/en/latest/>`_ package (``sammi-cdf``).
    SAMMI provides the schema loading, layering, and attribute derivation machinery, and ``swxsoc`` adds its default schema files and SWxSOC-specific derivations.

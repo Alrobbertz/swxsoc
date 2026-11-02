@@ -9,7 +9,7 @@ For an explanation of which piece your data belongs in, see :ref:`reading_writin
 
 .. note::
 
-   **Required install:** ``pip install swxsoc[cdf]``
+   **Required install:** ``pip install "swxsoc[cdf]"`` to get the CDF reading and writing functionality.
 
 All examples on this page use the ``hermes`` mission configuration:
 

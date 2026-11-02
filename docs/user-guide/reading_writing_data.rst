@@ -9,7 +9,7 @@ This page shows how to build a ``SWXData`` object, supply the required metadata,
 
 .. note::
 
-   **Required install:** ``pip install swxsoc[cdf]``
+   **Required install:** ``pip install "swxsoc[cdf]"`` to get the CDF reading and writing functionality.
 
    The ``cdf`` extra installs `SpacePy <https://spacepy.github.io/>`_, which includes the NASA CDF library.
    You do not need to install the CDF library separately.
@@ -38,7 +38,7 @@ Quick Start
 Select a mission
 ----------------
 
-``SWXData`` requires an active mission configuration, which holds the instruments, data levels, and file settings for the selected mission.
+Setup an active mission configuration for ``SWXData`` to use, which holds the instruments, data levels, and file settings for the selected mission.
 It uses that configuration to:
 
 - Get the mission name and file extension that go into file metadata and file names.
@@ -72,7 +72,7 @@ The smallest valid ``SWXData`` object needs one `~astropy.timeseries.TimeSeries`
     >>> ts = TimeSeries(
     ...     time_start="2016-03-22T12:30:31",
     ...     time_delta=3 * u.s,
-    ...     data={"Bx": u.Quantity([1, 2, 3, 4], "nT", dtype=np.int16)},
+    ...     data={"Bx": u.Quantity(value=[1, 2, 3, 4], unit="nT", dtype=np.int16)},
     ... )
     >>> meta = SWXData.global_attribute_template(
     ...   instr_name="nemisis", 
@@ -89,6 +89,9 @@ The smallest valid ``SWXData`` object needs one `~astropy.timeseries.TimeSeries`
 
 Note the use of `astropy.time` and `astropy.units`.
 They attach a time scale and a physical unit to every value, and ``SWXData`` requires them.
+
+The ``SWXData`` object converts your `~astropy.timeseries.TimeSeries` ``time`` column to the CDF ``CDF_TIME_TT2000`` type.
+This type is required for ISTP-compliant files, and it is the most precise time type available in CDF.
 
 Set the ``dtype`` of each measurement to the smallest type that holds your data, in this case 16-bit integers.
 If you do not, NumPy usually defaults to ``float64`` and the CDF file will be larger than needed.
@@ -122,7 +125,7 @@ See :ref:`swxdata_examples` for code examples of each of these:
      - Examples
    * - ``timeseries``
      - Yes
-     - A time column plus time-varying scalar measurements, one value per time step. 
+     - A time column plus time-varying **scalar** measurements, **one value per time step**. 
        This is not a two-dimensional array stored in row-major or column-major order.
        Each column is a separate one-dimensional array of shape ``[n]``, and each becomes its own record-varying variable in the CDF file.
        Use a `dict` of ``TimeSeries`` when measurements are sampled on different time axes (multiple epochs).
@@ -132,7 +135,7 @@ See :ref:`swxdata_examples` for code examples of each of these:
    * - ``support``
      - No
      - Data that does not vary with time, such as constants, calibration tables, and masks.
-       Also any multi-dimensional data that cannot be described by a World Coordinate System (WCS).
+       Also any time-varying data that cannot be described by a World Coordinate System (WCS).
      - `dict` of `str` to `~astropy.units.Quantity` or `~astropy.nddata.NDData`
      - - :ref:`Create <swxdata_support_example>`
        - :ref:`Add <rw_add_support>`
@@ -153,7 +156,7 @@ See :ref:`swxdata_examples` for code examples of each of these:
 Rules that ``SWXData`` enforces when you create the object:
 
 - ``timeseries`` is always required, even if you only have ``spectra`` or ``support`` data.
-  It must be a `~astropy.timeseries.TimeSeries` with at least one row and a ``time`` column.
+  It must be a `~astropy.timeseries.TimeSeries` with at least a ``time`` column.
 - Every ``timeseries`` column, other than ``time``, must be a one-dimensional `~astropy.units.Quantity` with a unit.
 - Every ``support`` value must be a `~astropy.units.Quantity` or `~astropy.nddata.NDData`.
 - ``spectra`` must be an `~ndcube.NDCollection`.
@@ -165,16 +168,27 @@ You can also create a ``SWXData`` object by loading an existing CDF file, see :r
 What a WCS is
 -------------
 
-A World Coordinate System (WCS) maps each array index along an axis to a physical value on that axis.
-The `~astropy.wcs.WCS` class implements the FITS WCS standard, which covers sky positions, spectral axes (wavelength, frequency, or energy), time, and other ordered axes.
-Energy bins and pitch angles are valid WCS axes when the value along the axis is a defined function of the index, such as a linear grid, a logarithmic grid, or a lookup table.
+A World Coordinate System (WCS) is a mapping from the array index along each axis of a data tensor to a physical coordinate on that axis.
+The index of each element goes into the WCS mapping, and the coordinate value, such as a time, energy, angle, or frequency, comes out.
+Because the mapping is a defined function, you can find the physical value of any element without storing a separate coordinate array for every point.
+
+The WCS concept comes from the Flexible Image Transport System (FITS) standard, which is widely used in astronomy.
+The original description of the WCS representation is `Greisen & Calabretta (2002) <https://doi.org/10.1051/0004-6361:20021327>`_, "Representations of world coordinates in FITS."
+The FITS standard itself is documented at `fits.gsfc.nasa.gov <https://fits.gsfc.nasa.gov/fits_standard.html>`_.
+
+The same idea applies to space physics data.
+An axis can represent any ordered quantity, such as time, energy, pitch angle, or frequency, when its value is a defined function of the index.
+Examples include a linear grid, a logarithmic grid, or a lookup table.
+The Python implementation of the WCS standard used by ``swxsoc`` is `~astropy.wcs.WCS`.
 
 Components of a vector, such as ``Ex``, ``Ey``, and ``Ez``, are not coordinates along an axis, so they do not belong in a WCS.
+
+For an example of a WCS for a pitch angle distribution, see :ref:`swxdata_spectra_example`.
 
 Choosing where to put your data
 -------------------------------
 
-Use the shape of your data to decide which argument it belongs in:
+Use the shape of your data to decide which argument your data belongs in:
 
 - **One value per time step** (for example temperature, count rate, or one magnetic or electric field component): add a column to ``timeseries``.
 - **Many values per time step, with axes you can describe with a WCS** (for example an energy spectrum with known energy bins): add an `~ndcube.NDCube` to ``spectra``.
@@ -348,7 +362,36 @@ Add higher-dimensional time-varying data with :py:func:`~swxsoc.swxdata.SWXData.
     ...     meta={"CATDESC": "Example spectra variable"},
     ... )
 
-Remove any variable by name with :py:func:`~swxsoc.swxdata.SWXData.remove`.
+Removing Data
+=============
+
+Remove a variable by name with :py:func:`~swxsoc.swxdata.SWXData.remove`.
+The method checks the ``timeseries`` columns, ``support``, and ``spectra``, so you do not need to know which argument holds the variable.
+
+.. _rw_remove_variable:
+
+Remove a time-varying scalar measurement, a support variable, and a spectra variable by name:
+
+.. doctest::
+
+    >>> sw_data.remove("By")
+    >>> "By" in sw_data.timeseries.colnames
+    False
+    >>> sw_data.remove("calibration_const")
+    >>> "calibration_const" in sw_data.support
+    False
+    >>> sw_data.remove("example_spectra")
+    >>> "example_spectra" in sw_data.spectra
+    False
+
+If the name is not found, ``remove`` raises a `ValueError`:
+
+.. doctest::
+
+    >>> sw_data.remove("not_a_variable")
+    Traceback (most recent call last):
+    ...
+    ValueError: Data for Measurement not_a_variable not found.
 
 Visualizing Data
 ================
@@ -381,23 +424,40 @@ Writing a CDF File
 ==================
 
 Write a CDF file with :py:func:`~swxsoc.swxdata.SWXData.save`.
-The output directory can be specified with ``output_path``, in which case the file name is built from the ``Logical_file_id`` attribute, or a full file path.
-If you do not pass ``output_path``, the file is written to the current working directory.
-Set ``overwrite=True`` to replace an existing file with the same name.
-``save`` returns the path to the new file.
+The ``output_path`` argument can be **either a directory or a file path**, and ``save`` returns the path to the new file.
+
+If ``output_path`` is a directory, the file name is built from the ``Logical_file_id`` attribute.
+**This is the recommended option**, because ``swxsoc`` generates the logical file ID for you.
+
+.. doctest::
 
     >>> import tempfile
     >>> with tempfile.TemporaryDirectory() as tmp_dir:
     ...     cdf_file_path = sw_data.save(output_path=tmp_dir)
+    >>> Path(cdf_file_path).name
+    'hermes_nem_l1_20160322T123031_v1.0.0.cdf'
+
+If ``output_path`` includes a file name, that name replaces the ``Logical_file_id`` in the file name.
+**We do not recommend specifying a file name for archived files**, but it is useful for testing.
+
+.. doctest::
+
+    >>> from pathlib import Path
+    >>> with tempfile.TemporaryDirectory() as tmp_dir:
+    ...     cdf_file_path = sw_data.save(output_path=Path(tmp_dir) / "my_test_file.cdf")
+    >>> Path(cdf_file_path).name
+    'my_test_file.cdf'
+
+If you do not pass ``output_path``, the file is written to the current working directory.
+Set ``overwrite=True`` to replace an existing file with the same name.
 
 Missing data, ``NaN`` values, and masks are written as the CDF ``FILLVAL``, see :ref:`fillval_and_masks`.
 
 .. note::
 
     **Multi-epoch data:** When a ``SWXData`` object has more than one ``TimeSeries``, variable names can collide in the CDF file's flat list of variables.
-    ``swxsoc`` prefixes a name only when there is a collision.
-    For example, if ``Lat`` appears in two time series, the first is written as ``Lat`` and the second as ``REACH_134_Lat``.
-    The original structure is restored when you load the file.
+    ``swxsoc`` dynamically prefixes a name only when there is a collision when writing the CDF file.
+    The original structure is restored when you load the file back into a ``SWXData`` object.
     See section 6 of the :ref:`cdf_format_guide` for details.
 
 Before you share or archive the file, validate it as described in :ref:`cdf_validation`.

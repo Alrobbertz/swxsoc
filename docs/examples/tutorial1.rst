@@ -8,7 +8,7 @@ For an explanation of each step, see :ref:`reading_writing_cdf`.
 
 .. note::
 
-   **Required install:** ``pip install swxsoc[cdf]``
+   **Required install:** ``pip install "swxsoc[cdf]"`` to get the CDF reading and writing functionality.
 
     >>> import os
     >>> from pathlib import Path
