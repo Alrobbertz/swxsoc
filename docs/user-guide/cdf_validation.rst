@@ -107,4 +107,4 @@ If your mission uses a custom metadata schema, pass it to ``validate`` with the 
     >>> "Required attribute (MISSION_NOTE) not present in global attributes." in validation_errors
     True
 
-See :ref:`schema_information_guide` for how to create a custom schema.
+See :ref:`schema_information_guide` for how to create a custom schema. This provides some of the functionality found in CDF skeleton files.
