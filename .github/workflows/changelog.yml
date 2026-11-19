@@ -2,6 +2,7 @@ name: Check CHANGELOG is Updated
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     branches:
       - main
 
