@@ -1,7 +1,7 @@
 # Project Guidelines
 
 ## Code Style
-- Target Python 3.10+ and keep changes compatible with the existing style in each file.
+- Target Python 3.11+ and keep changes compatible with the existing style in each file.
 - Use Ruff for lint/format:
   - `ruff check --fix`
   - `ruff format`
@@ -31,7 +31,7 @@
   - `all`: `swxsoc[cdf,fits,tracker]` — every supported file format.
   - `docs`, `test`, `style`: documentation, test, and lint/format tooling.
   - `dev`: `swxsoc[docs,test,style]`.
-- The base install must stay importable and usable without any extra installed. CI enforces this with a core-only workflow (`.github/workflows/test_core.yml`, `.[test]`, Python 3.12) alongside a full workflow (`.github/workflows/testing.yml`, `.[all,test]`, Python 3.10–3.14).
+- The base install must stay importable and usable without any extra installed. CI enforces this with a core-only workflow (`.github/workflows/test_core.yml`, `.[test]`, Python 3.12) alongside a full workflow (`.github/workflows/testing.yml`, `.[all,test]`, Python 3.11–3.15).
 - Guard optional imports at module load and fail late with an actionable message, matching the existing pattern:
   ```python
   try:

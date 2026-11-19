@@ -107,7 +107,7 @@ Each entry is a JSON object with the following keys:
      - Branch, tag, or SHA to check out.  Typically ``"main"``.
    * - ``python_version``
      - yes
-     - Python version used to run this package's tests (e.g. ``"3.10"``).
+     - Python version used to run this package's tests (e.g. ``"3.12"``).
    * - ``install_command``
      - yes
      - Shell command run from the downstream repo root to install the package and its
@@ -124,7 +124,7 @@ Example entry::
       "enabled": true,
       "repository": "my-org/my_mission_pkg",
       "ref": "main",
-      "python_version": "3.10",
+      "python_version": "3.12",
       "install_command": "python -m pip install -e .[test]",
       "test_command": "pytest my_mission_pkg --tb=short -q"
     }

@@ -10,7 +10,7 @@ The base install provides the core package, and optional extras add CDF file sup
 Requirements
 ============
 
-- Python 3.10 or later.
+- Python 3.11 or later.
 - ``pip``, which is included with most Python installations.
 
 Check your Python version with:

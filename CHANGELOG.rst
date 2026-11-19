@@ -2,7 +2,9 @@ This project uses `semantic versioning <https://semver.org>`_.
 
 Latest
 ======
-
+* Add workflow to check that the CHANGELOG is updated for each pull request to main.
+* Dropped support for Python 3.10, which has reached end-of-life. The minimum supported version is now Python 3.11.
+* Added Python 3.15 to the full test matrix and added Trove classifiers for Python 3.11 to 3.14.
 
 0.2.4 (2026-11-17)
 ==================
