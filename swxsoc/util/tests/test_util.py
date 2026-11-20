@@ -1,9 +1,12 @@
 """Tests for util.py"""
 
+from contextlib import nullcontext
+
 import pytest
 from astropy.time import Time
 
 from swxsoc.util import util
+from swxsoc.util.exceptions import SWXUserWarning
 
 time = "2024-04-06T12:06:21"
 time_formatted = "20240406T120621"
@@ -154,7 +157,15 @@ def test_parse_science_filename_errors(filename, expected_error):
     """Test for errors in filename parsing"""
     # HERMES mission is set by default via autouse fixture in conftest.py
 
-    with pytest.raises(ValueError, match=expected_error):
+    # A mismatched mission name warns before the error is raised
+    if filename.startswith("veeger"):
+        warn_context = pytest.warns(
+            SWXUserWarning, match="Not a valid mission name"
+        )
+    else:
+        warn_context = nullcontext()
+
+    with warn_context, pytest.raises(ValueError, match=expected_error):
         util.parse_science_filename(filename)
 # fmt: on
 

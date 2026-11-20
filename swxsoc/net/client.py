@@ -188,11 +188,11 @@ class SWXSOCClient(BaseClient):
             return response
 
         except NoCredentialsError:
-            swxsoc.log.warning("Credentials not available. Trying unsigned access.")
+            swxsoc.log.debug("Credentials not available. Trying unsigned access.")
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             if error_code == "AccessDenied":
-                swxsoc.log.warning(
+                swxsoc.log.debug(
                     f"Access denied to {bucket_name}/{object_key}. Trying unsigned access."
                 )
             else:
@@ -202,7 +202,9 @@ class SWXSOCClient(BaseClient):
         # If credentials are missing or access is denied, try unsigned access
         try:
             # Attempt to access the object with an unsigned request (public access)
-            swxsoc.log.info(f"Attempting unsigned access to {bucket_name}/{object_key}")
+            swxsoc.log.debug(
+                f"Attempting unsigned access to {bucket_name}/{object_key}"
+            )
             url = f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
             return url
         except ClientError as unsigned_error:
@@ -284,25 +286,25 @@ class SWXSOCClient(BaseClient):
         swxsoc.log.debug(f"Mapping of instruments to S3 buckets: {instrument_buckets}")
 
         if instrument is None or instrument not in instrument_buckets:
-            swxsoc.log.info(
+            swxsoc.log.debug(
                 "No instrument specified or invalid instrument. Searching all instruments."
             )
             instrument_bucket_to_search = instrument_buckets.values()
         else:
-            swxsoc.log.info(f"Searching for instrument: {instrument}")
+            swxsoc.log.debug(f"Searching for instrument: {instrument}")
             instrument_bucket_to_search = [instrument_buckets[instrument]]
 
-        swxsoc.log.info(f"Searching in buckets: {instrument_bucket_to_search}")
+        swxsoc.log.debug(f"Searching in buckets: {instrument_bucket_to_search}")
 
         files_in_s3 = cls.list_files_in_s3(instrument_bucket_to_search)
 
         # Filter Files Based on Levels, Time Range, and Descriptor
         if levels is not None or start_time is not None or end_time is not None:
-            swxsoc.log.info(
+            swxsoc.log.debug(
                 f"Searching for files with level {levels} between {start_time} and {end_time}"
             )
             if descriptor:
-                swxsoc.log.info(f"Searching for files with descriptor: {descriptor}")
+                swxsoc.log.debug(f"Searching for files with descriptor: {descriptor}")
 
             prefixes = cls.generate_prefixes(levels, start_time, end_time, descriptor)
 
@@ -315,7 +317,7 @@ class SWXSOCClient(BaseClient):
                     ):
                         matched_files.append(this_s3_file)
         else:
-            swxsoc.log.info("Searching for all files")
+            swxsoc.log.debug("Searching for all files")
 
         # remove duplicates
         unique_matched_files = []
@@ -397,7 +399,7 @@ class SWXSOCClient(BaseClient):
                         }
                         content.append(metadata)
             except (ClientError, NoCredentialsError) as e:
-                swxsoc.log.warning(
+                swxsoc.log.debug(
                     f"Error accessing bucket {bucket_name}: {e}", exc_info=True
                 )
                 if isinstance(e, NoCredentialsError):
@@ -406,7 +408,7 @@ class SWXSOCClient(BaseClient):
                     error_code = e.response["Error"]["Code"]
                 # Retry?
                 if error_code == "AccessDenied" or error_code == "NoCredentialsError":
-                    swxsoc.log.warning(
+                    swxsoc.log.debug(
                         f"Access denied to bucket {bucket_name}. Trying unsigned request."
                     )
                     # Retry with an unsigned (anonymous) client

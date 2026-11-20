@@ -288,13 +288,22 @@ This example loads a sample file that is included with ``swxsoc``:
 .. doctest::
 
     >>> from pathlib import Path
+    >>> import warnings
+    >>> from swxsoc.util.exceptions import SWXUserWarning
     >>> sample_file = (
     ...     Path(swxsoc.__file__).parent
     ...     / "data"
     ...     / "sample"
     ...     / "hermes_nms_default_l1_20160322T123031_v0.0.1.cdf"
     ... )
-    >>> loaded_data = SWXData.load(sample_file)
+    >>> with warnings.catch_warnings():
+    ...     # The sample file was generated in the past, so its stored Generation_date
+    ...     # differs from the value SWXData derives when it loads the file (the current date).
+    ...     # SWXData warns about this override, which is expected here, so we ignore it for this load only.
+    ...     warnings.filterwarnings(
+    ...         "ignore", message="Overriding Global Attribute Generation_date", category=SWXUserWarning
+    ...     )
+    ...     loaded_data = SWXData.load(sample_file)
     >>> loaded_data.meta["Data_version"]
     '0.0.1'
 

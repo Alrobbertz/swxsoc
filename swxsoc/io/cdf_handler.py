@@ -34,7 +34,7 @@ from swxsoc.io import fillval as fv
 from swxsoc.io.base_handler import SWXIOHandler
 from swxsoc.swxdata import SWXData
 from swxsoc.util import const
-from swxsoc.util.exceptions import warn_user
+from swxsoc.util.exceptions import ignore_dubious_year, warn_user
 from swxsoc.util.schema import SWXSchema
 
 __all__ = ["CDFHandler"]
@@ -128,9 +128,8 @@ class CDFHandler(SWXIOHandler):
 
             # Make sure at least one Epoch variable is present in the CDF
             if len(epoch_variables) == 0:
-                warn_user(f"No Epoch variables found in CDF file: {file_path}")
                 raise ValueError(
-                    "Cannot load CDF file without Epoch variables. "
+                    f"Cannot load CDF file without Epoch variables: {file_path}. "
                     "SWXData requires at least one time series with time data."
                 )
 
@@ -281,7 +280,8 @@ class CDFHandler(SWXIOHandler):
                 var_attrs[attr_name] = fv.get_fillval(var_data.type())
             elif isinstance(var_data.attrs[attr_name], datetime):
                 # Metadata Attribute is a Datetime - we want to convert to Astropy Time
-                var_attrs[attr_name] = Time(var_data.attrs[attr_name])
+                with ignore_dubious_year():
+                    var_attrs[attr_name] = Time(var_data.attrs[attr_name])
             else:
                 # Metadata Attribute loaded without modifications
                 var_attrs[attr_name] = var_data.attrs[attr_name]
@@ -312,7 +312,8 @@ class CDFHandler(SWXIOHandler):
             ``time_data.mask`` is set at those positions.
         """
         # Datetime-converted values for building Time
-        time_data = Time(input_file[epoch_var][:].copy())
+        with ignore_dubious_year():
+            time_data = Time(input_file[epoch_var][:].copy())
         # Raw numeric values (int64 for TT2000, float64 for EPOCH,
         # complex128 for EPOCH16) for sentinel detection.
         raw_values = input_file.raw_var(epoch_var)[:]
@@ -957,7 +958,8 @@ class CDFHandler(SWXIOHandler):
                 )
             elif isinstance(var_attr_val, Time):
                 # Convert the Attribute to Datetime before adding to CDF File
-                var.attrs[var_attr_name] = var_attr_val.to_datetime()
+                with ignore_dubious_year():
+                    var.attrs[var_attr_name] = var_attr_val.to_datetime()
             else:
                 # Add the Attribute to the CDF File
                 var.attrs[var_attr_name] = var_attr_val
