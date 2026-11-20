@@ -186,7 +186,7 @@ def test_print_config(capsys):
 
 def test_copy_default_config_overwriting(tmpdir, monkeypatch):
     """Tests the overwrite=False keyword with copy_default_config()"""
-    monkeypatch.setenv("SWXSOC_CONFIGDIR", tmpdir)
+    monkeypatch.setenv("SWXSOC_CONFIGDIR", str(tmpdir))
     copy_default_config()
 
     # Test overwrite=False issues warning

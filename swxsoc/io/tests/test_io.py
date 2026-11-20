@@ -1,12 +1,14 @@
 """Tests for Loading and Saving data from data containers"""
 
 import tempfile
+import warnings
 from collections import OrderedDict
 from pathlib import Path
 
 import astropy.units as u
 import numpy as np
 import pytest
+from astropy.io.fits.verify import VerifyWarning
 from astropy.nddata import NDData
 from astropy.table import Table
 from astropy.time import Time
@@ -259,7 +261,9 @@ def test_cdf_nrv_support_data():
             cdf_file["Test_Support_Var"].meta["VAR_TYPE"] = "support_data"
 
         # Make sure we can load the modified JSON
-        td_loaded = SWXData.load(test_file_output_path)
+        # Warns that UNITS are not recognized, catch warnings to avoid polluting test output
+        with pytest.warns(SWXUserWarning, match="Cannot create"):
+            td_loaded = SWXData.load(test_file_output_path)
 
         assert "Test_NRV_Var" in td_loaded.support
         assert "Test_Support_Var" in td_loaded.timeseries.columns
@@ -269,9 +273,7 @@ def test_with_no_epoch_var():
     """
     Test loading a CDF file with no epoch variables (only support/NRV data).
 
-    This tests that:
-    1. A warning is issued when no Epoch variables are found in the CDF file
-    2. Loading fails with a clear ValueError explaining that SWXData requires time series data
+    This tests that loading fails with a clear ValueError explaining that SWXData requires time series data
 
     SWXData cannot be created without at least one timeseries with time data,
     as it is fundamental to the data model and required for metadata derivation.
@@ -310,29 +312,12 @@ def test_with_no_epoch_var():
             cdf_file["Calibration_Factor"].attrs["FIELDNAM"] = "Calibration_Factor"
             cdf_file["Calibration_Factor"].attrs["UNITS"] = ""
 
-        # Attempting to load should issue a warning AND then fail with ValueError
+        # Attempting to load should fail with ValueError
         # because SWXData requires time series data
-        with pytest.warns(
-            SWXUserWarning, match="No Epoch variables found in CDF file"
-        ) as warning_list:
-            with pytest.raises(
-                ValueError, match="Cannot load CDF file without Epoch variables"
-            ):
-                SWXData.load(test_file_path)
-
-        # Verify the warning was issued from the CDF handler
-        assert any(
-            "No Epoch variables found in CDF file" in str(w.message)
-            for w in warning_list
-        )
-        # Find the specific warning about no epoch variables
-        target_warnings = [
-            w
-            for w in warning_list
-            if "No Epoch variables found in CDF file" in str(w.message)
-            and w.category == SWXUserWarning
-        ]
-        assert len(target_warnings) >= 1, "Expected warning about no Epoch variables"
+        with pytest.raises(
+            ValueError, match="Cannot load CDF file without Epoch variables"
+        ):
+            SWXData.load(test_file_path)
 
 
 def test_epoch_key_with_hyphen_rejected():
@@ -399,7 +384,9 @@ def test_cdf_spectra_data():
             cdf_file["Test_Spectra_Var"].meta["UNITS"] = "counts"
 
         # Make sure we can load the modified JSON
-        td_loaded = SWXData.load(test_file_output_path)
+        # Warns that UNITS are not recognized, catch warnings to avoid polluting test output
+        with pytest.warns(SWXUserWarning, match="Cannot create"):
+            td_loaded = SWXData.load(test_file_output_path)
 
         assert "Test_Spectra_Var" in td_loaded.spectra
 
@@ -1004,9 +991,15 @@ def test_cdf_custom_filename():
         fits_filename = "real_fits_format.fits"
         fits_path = tmp_path / fits_filename
 
-        # Convert TimeSeries to Table and write as actual FITS format
+        # Convert TimeSeries to Table and write as actual FITS format.
+        # The CDF global metadata attributes (Descriptor, Data_level,
+        # Data_version) are reused as FITS header keywords in this experiment.
+        # They are longer than 8 characters, so astropy creates HIERARCH cards
+        # and emits a VerifyWarning, which is expected here.
         fits_table = Table(td.timeseries)
-        fits_table.write(fits_path, format="fits", overwrite=True)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=VerifyWarning)
+            fits_table.write(fits_path, format="fits", overwrite=True)
 
         # Verify FITS file was created
         assert fits_path.exists()

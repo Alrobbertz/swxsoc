@@ -889,37 +889,38 @@ class SWXData:
 
         # Set up the plot axes based on the number of columns to plot
         axes, columns = self._setup_axes_columns(axes, columns, subplots=subplots)
-        quantity_support()
-        time_support()
 
-        if subplots:
-            i = 0
-            if isinstance(axes, Axes):  # subplots is true but only one column given
-                iter_axes = [axes]
+        # Scope the astropy unit/time converters to this call so they are not
+        # registered globally with matplotlib.
+        with quantity_support(), time_support():
+            if subplots:
+                i = 0
+                if isinstance(axes, Axes):  # subplots is true but only one column given
+                    iter_axes = [axes]
+                else:
+                    iter_axes = axes
+                for this_ax, this_col in zip(iter_axes, columns):
+                    if i == 0:
+                        this_ax.set_title(
+                            f"{self.meta['Mission_group']} {self.meta['Descriptor']} {self.meta['Data_level']}"
+                        )
+                        i += 1
+                    this_ax.plot(self.time, self.timeseries[this_col], **plot_args)
+                    this_ax.set_ylabel(self.timeseries[this_col].meta["LABLAXIS"])
             else:
-                iter_axes = axes
-            for this_ax, this_col in zip(iter_axes, columns):
-                if i == 0:
-                    this_ax.set_title(
-                        f"{self.meta['Mission_group']} {self.meta['Descriptor']} {self.meta['Data_level']}"
-                    )
-                    i += 1
-                this_ax.plot(self.time, self.timeseries[this_col], **plot_args)
-                this_ax.set_ylabel(self.timeseries[this_col].meta["LABLAXIS"])
-        else:
-            axes.set_title(
-                f"{self.meta['Mission_group']} {self.meta['Descriptor']} {self.meta['Data_level']}"
-            )
-            for this_col in columns:
-                axes.plot(
-                    self.time,
-                    self.timeseries[this_col],
-                    label=self.timeseries[this_col].meta["LABLAXIS"],
-                    **plot_args,
+                axes.set_title(
+                    f"{self.meta['Mission_group']} {self.meta['Descriptor']} {self.meta['Data_level']}"
                 )
-            axes.legend()
-        # Setup the Time Axis
-        self._setup_x_axis(axes)
+                for this_col in columns:
+                    axes.plot(
+                        self.time,
+                        self.timeseries[this_col],
+                        label=self.timeseries[this_col].meta["LABLAXIS"],
+                        **plot_args,
+                    )
+                axes.legend()
+            # Setup the Time Axis
+            self._setup_x_axis(axes)
 
         return axes
 

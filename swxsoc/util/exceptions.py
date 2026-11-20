@@ -9,6 +9,7 @@ This code is based on that provided by SunPy see
 """
 
 import warnings
+from contextlib import contextmanager
 
 __all__ = [
     "SWXWarning",
@@ -17,6 +18,7 @@ __all__ = [
     "SWXPendingDeprecationWarning",
     "warn_user",
     "warn_deprecated",
+    "ignore_dubious_year",
 ]
 
 
@@ -48,6 +50,33 @@ class SWXPendingDeprecationWarning(PendingDeprecationWarning, SWXWarning):
     """
     A warning class to indicate a soon-to-be deprecated feature.
     """
+
+
+@contextmanager
+def ignore_dubious_year():
+    """
+    Context manager that silences ERFA "dubious year" warnings.
+
+    ERFA warns for dates outside of its leap second table (for example the
+    year 2250 used as the ``VALIDMAX`` of time variables), which is expected for
+    CDF time metadata. The suppression only applies inside the ``with`` block
+    and does not alter the global warning filters.
+
+    Examples
+    --------
+    >>> from astropy.time import Time
+    >>> from swxsoc.util.exceptions import ignore_dubious_year
+    >>> with ignore_dubious_year():
+    ...     t = Time("2250-01-01T00:00:00", format="isot")
+    ...     dt = t.to_datetime()
+    """
+    import erfa
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=".*dubious year.*", category=erfa.ErfaWarning
+        )
+        yield
 
 
 def warn_user(msg, stacklevel=1):

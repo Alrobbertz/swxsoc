@@ -20,6 +20,7 @@ from astropy.time import Time
 import swxsoc
 import swxsoc.io.fillval as fv
 from swxsoc.util import const, util
+from swxsoc.util.exceptions import ignore_dubious_year
 
 __all__ = ["SWXSchema", "CDF_TO_NUMPY_TYPES"]
 
@@ -671,7 +672,9 @@ class SWXSchema(CdfAttributeManager):
                 ]
             else:  # float
                 if dims == ():
-                    if d != 0 and (abs(d) > 1.7e38 or abs(d) < 3e-39):
+                    # Compare as float64 so narrow float dtypes (e.g. float16)
+                    # do not overflow when cast to the 1.7e38 threshold
+                    if d != 0 and (abs(float(d)) > 1.7e38 or abs(float(d)) < 3e-39):
                         types = [const.CDF_DOUBLE, const.CDF_REAL8]
                     else:
                         types = [
@@ -681,7 +684,7 @@ class SWXSchema(CdfAttributeManager):
                             const.CDF_REAL8,
                         ]
                 else:
-                    absolutes = np.abs(d[d != 0])
+                    absolutes = np.abs(d[d != 0]).astype(np.float64)
                     if len(absolutes) > 0 and (
                         np.max(absolutes) > 1.7e38 or np.min(absolutes) < 3e-39
                     ):
@@ -750,10 +753,11 @@ class SWXSchema(CdfAttributeManager):
             const.CDF_EPOCH16.value,
             const.CDF_TIME_TT2000.value,
         ]:
-            return (
-                Time("1900-1-1T00:00:00.000", format="isot"),
-                Time("2250-1-1T00:00:00.000", format="isot"),
-            )
+            with ignore_dubious_year():
+                return (
+                    Time("1900-1-1T00:00:00.000", format="isot"),
+                    Time("2250-1-1T00:00:00.000", format="isot"),
+                )
         dtype = self.numpytypedict.get(cdftype, None)
         if dtype is None:
             raise ValueError("Unknown data type: {}".format(cdftype))
@@ -1074,6 +1078,9 @@ class SWXSchema(CdfAttributeManager):
             # -Truncate and add 1 rather than ceil so get
             # powers of 10 (log10(10) = 1 but needs two digits)
             # -Make sure not taking log of zero
+            # Use Python ints so numpy scalar arithmetic cannot overflow
+            # (e.g. abs(np.int8(-128)))
+            minval, maxval = int(minval), int(maxval)
             if minval < 0:  # Need an extra space for the negative sign
                 fmt = "I{}".format(
                     int(math.log10(max(abs(maxval), abs(minval), 1))) + 2
@@ -1093,7 +1100,10 @@ class SWXSchema(CdfAttributeManager):
             const.CDF_DOUBLE.value,
         ):
             if "VALIDMIN" in var_data.meta and "VALIDMAX" in var_data.meta:
-                range = var_data.meta["VALIDMAX"] - var_data.meta["VALIDMIN"]
+                # Python floats so numpy scalar subtraction cannot overflow
+                range = float(var_data.meta["VALIDMAX"]) - float(
+                    var_data.meta["VALIDMIN"]
+                )
             # If not, just use nothing.
             else:
                 range = None

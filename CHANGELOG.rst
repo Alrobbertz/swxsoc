@@ -3,6 +3,11 @@ This project uses `semantic versioning <https://semver.org>`_.
 Latest
 ======
 * Add workflow to check that the CHANGELOG is updated for each pull request to main.
+* Reduced warning noise: the ERFA "dubious year" warning is now suppressed with the new ``swxsoc.util.exceptions.ignore_dubious_year`` context manager around the time metadata conversions in ``swxsoc``.
+* Fixed numpy overflow ``RuntimeWarning``\ s when computing CDF variable formats and float type ranges.
+* ``SWXData.plot`` no longer registers the astropy quantity and time converters globally with matplotlib.
+* Removed the ``SWXUserWarning`` issued before the ``ValueError`` when loading a CDF file without Epoch variables; the file path is now part of the error message.
+* Demoted handled S3 fallback messages (unsigned access retries) and search progress messages in ``swxsoc.net`` from WARNING/INFO to DEBUG.
 
 
 0.2.4 (2026-11-17)

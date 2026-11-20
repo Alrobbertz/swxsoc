@@ -4,6 +4,7 @@ from typing import Union
 
 import numpy as np
 
+from swxsoc.util.exceptions import ignore_dubious_year
 from swxsoc.util.schema import SWXSchema
 
 # Conditional import for CDF support
@@ -465,7 +466,11 @@ if HAS_SPACEPY:
                         )
                     )
                     continue  # Cannot do comparisons
-                if np.any((minval > attrval)) or np.any((maxval < attrval)):
+                with ignore_dubious_year():
+                    out_of_range = np.any((minval > attrval)) or np.any(
+                        (maxval < attrval)
+                    )
+                if out_of_range:
                     errs.append(
                         "{} ({}) outside valid data range ({},{}).".format(
                             which,

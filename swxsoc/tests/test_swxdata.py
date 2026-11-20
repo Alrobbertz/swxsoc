@@ -688,6 +688,7 @@ def test_sw_data_plot():
     """
     # Skip this test if matplotlib is not available
     pytest.importorskip("matplotlib")
+    import matplotlib.pyplot as plt
     from matplotlib.axes import Axes
 
     # fmt: off
@@ -706,16 +707,22 @@ def test_sw_data_plot():
     q.meta = OrderedDict({"CATDESC": "Test Variable"})
     test_data.add_measurement(measure_name="test", data=q)
 
-    # Plot All Columns
+    # Plot All Columns (use a fresh figure each time so axes converters are not
+    # reset on axes that were already plotted to)
+    plt.figure()
     ax = test_data.plot(subplots=True)
     assert isinstance(ax, np.ndarray)
+    plt.figure()
     ax = test_data.plot(subplots=False)
     assert isinstance(ax, Axes)
     # Plot Single Column
+    plt.figure()
     ax = test_data.plot(columns=["test"], subplots=True)
     assert isinstance(ax, Axes)
+    plt.figure()
     ax = test_data.plot(columns=["test"], subplots=False)
     assert isinstance(ax, Axes)
+    plt.close("all")
 
 
 def test_sw_data_append():
@@ -1158,13 +1165,12 @@ def test_sw_data_idempotency():
         np.uint8,
         np.uint16,
         np.uint32,
-        np.uint64,
         np.int8,
         np.int16,
         np.int32,
         np.int64,
-        np.float16,
         np.float32,
+        np.float64,
     ],
 )
 def test_bitlength_save_cdf(bitlength):

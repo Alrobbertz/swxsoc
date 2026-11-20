@@ -13,6 +13,7 @@ from numpy.random import random
 
 from swxsoc.swxdata import SWXData
 from swxsoc.util import const
+from swxsoc.util.exceptions import ignore_dubious_year
 from swxsoc.util.schema import SWXSchema
 
 # Skip all tests in this module if spacepy is not available
@@ -314,24 +315,27 @@ def test_min_max_TT2000():
     """Get min/max values for TT2000 types"""
     minval, maxval = SWXSchema()._get_minmax(const.CDF_TIME_TT2000)
     # Make sure the minimum isn't just plain invalid
-    assert minval == Time("1900-1-1T00:00:00.000", format="isot")
-    assert maxval == Time("2250-1-1T00:00:00.000", format="isot")
+    with ignore_dubious_year():
+        assert minval == Time("1900-1-1T00:00:00.000", format="isot")
+        assert maxval == Time("2250-1-1T00:00:00.000", format="isot")
 
 
 def test_min_max_Epoch16():
     """Get min/max values for Epoch16 types"""
     minval, maxval = SWXSchema()._get_minmax(const.CDF_EPOCH16)
     # Make sure the minimum isn't just plain invalid
-    assert minval == Time("1900-1-1T00:00:00.000", format="isot")
-    assert maxval == Time("2250-1-1T00:00:00.000", format="isot")
+    with ignore_dubious_year():
+        assert minval == Time("1900-1-1T00:00:00.000", format="isot")
+        assert maxval == Time("2250-1-1T00:00:00.000", format="isot")
 
 
 def test_min_max_Epoch():
     """Get min/max values for EPOCH types"""
     minval, maxval = SWXSchema()._get_minmax(const.CDF_EPOCH)
     # Make sure the minimum isn't just plain invalid
-    assert minval == Time("1900-1-1T00:00:00.000", format="isot")
-    assert maxval == Time("2250-1-1T00:00:00.000", format="isot")
+    with ignore_dubious_year():
+        assert minval == Time("1900-1-1T00:00:00.000", format="isot")
+        assert maxval == Time("2250-1-1T00:00:00.000", format="isot")
 
 
 def test_min_max_Float():
