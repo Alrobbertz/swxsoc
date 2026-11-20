@@ -2,6 +2,7 @@ This project uses `semantic versioning <https://semver.org>`_.
 
 Latest
 ======
+* Add workflow to check that the CHANGELOG is updated for each pull request to main.
 
 * Reduced warning noise: the ERFA "dubious year" warning is now suppressed with the new ``swxsoc.util.exceptions.ignore_dubious_year`` context manager around the time metadata conversions in ``swxsoc``.
 * Fixed numpy overflow ``RuntimeWarning``\ s when computing CDF variable formats and float type ranges.
